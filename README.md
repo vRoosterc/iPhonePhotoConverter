@@ -23,7 +23,8 @@ A cross-platform application for transferring photos/videos from an iPhone to yo
 That's it! The launcher will:
 - ✅ **Automatically install Python** if not found (Windows: fully automatic, macOS/Linux: guided)
 - ✅ **Auto-install all required dependencies** (PyQt6, Pillow, etc.)
-- ✅ **Launch the iPhone Photo Converter application**
+- ✅ **Launch the iPhone Photo Converter with smart auto-detection**
+- ✅ **Find your iPhone automatically** using 6 different detection methods
 - ✅ **Handle everything for you** - no technical knowledge required!
 
 ### 📋 System Requirements
@@ -40,11 +41,13 @@ That's it! The launcher will:
 ## 📱 How to Use
 
 1. **Connect your iPhone** to your computer using a USB cable
-2. **Launch the application** by double-clicking the launcher for your platform
-3. Click **"Detect iPhone"** to locate your connected device
-4. (Optional) Click **"Select Output Folder"** to choose where to save your photos/videos
-5. Click **"Transfer and Convert Photos"** to begin the process
+2. **Launch the application** by double-clicking the launcher for your platform  
+3. Click **"🔍 Auto-Detect iPhone"** - the app will automatically find your iPhone using 6 different methods
+4. (Optional) Click **"📁 Select Output Folder"** to choose where to save your photos/videos
+5. Click **"📱➡️💻 Transfer and Convert Photos"** to begin the process
 6. **Wait for completion** - the application will automatically open the folder containing your transferred photos
+
+**🔄 If detection fails:** Click "Retry Detection" for 3 automatic retry attempts, or use "⚙️ Advanced Options" if needed.
 
 ## 🔧 Advanced Setup Options
 
@@ -94,12 +97,21 @@ If you prefer to install manually or need more control:
 
 ### iPhone Detection Issues
 
-**The app now uses 8 different detection methods for Windows, but if your iPhone still isn't recognized:**
+**The app now features fully automatic iPhone detection with 6 advanced methods on Windows:**
 
-**Quick Solutions:**
-- Click **"🔍 Manually Select iPhone DCIM Folder"** to browse to your iPhone's photo folder
-- Click **"🐛 Debug Detection"** to see exactly what the app is finding
-- Use **"🧪 Test Connection"** for detailed diagnostics
+🔍 **Auto-Detection Methods:**
+1. **Windows Shell COM Interface** - Direct MTP device access
+2. **Enhanced Drive Scanning** - All partitions with psutil  
+3. **WMI Device Detection** - Windows device manager integration
+4. **PowerShell Device Discovery** - Advanced system queries
+5. **Registry Device Enumeration** - Mount point detection
+6. **USB Device Correlation** - Smart device-to-path matching
+
+🎯 **Just Click "Auto-Detect iPhone" - Everything Happens Automatically!**
+
+**If Auto-Detection Fails:**
+- Click **"🔄 Retry Detection"** (tries 3 times with 2-second delays)
+- View **"⚙️ Advanced Options"** for manual override tools if needed
 
 **If automatic detection fails:**
 
