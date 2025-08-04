@@ -94,10 +94,26 @@ If you prefer to install manually or need more control:
 
 ### iPhone Detection Issues
 
-- Make sure your iPhone is connected and you've **trusted the computer** on your iPhone
-- Try a **different USB port or cable**
-- On macOS: Install libusb with `brew install libusb`
-- On Linux: Install libusb development package: `sudo apt-get install libusb-1.0-0-dev`
+**The app now uses advanced detection methods, but if your iPhone still isn't recognized:**
+
+**For Windows:**
+- Make sure your iPhone is **unlocked** and you've tapped **"Trust This Computer"**
+- Install **iTunes** or **Apple Mobile Device Support** if not already installed
+- Try a **different USB port or cable** (USB 3.0 ports work best)
+- **Restart both your iPhone and computer** if detection fails
+- Check Windows Device Manager to see if iPhone appears under "Portable Devices"
+
+**For macOS:**
+- Make sure your iPhone is **unlocked** and you've tapped **"Trust This Computer"**
+- **Close the Photos app** if it's open (it may have exclusive access)
+- Install libusb with `brew install libusb` for better USB detection
+- Try **disconnecting and reconnecting** your iPhone
+
+**For Linux:**
+- Make sure your iPhone is **unlocked** and you've tapped **"Trust This Computer"**
+- Install required packages: `sudo apt-get install libimobiledevice-utils ifuse`
+- You may need to run the app with `sudo` for the first connection
+- Install libusb development package: `sudo apt-get install libusb-1.0-0-dev`
 
 ### Python Not Found
 

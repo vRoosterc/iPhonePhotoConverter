@@ -52,12 +52,13 @@ def install_dependencies():
         'pillow-heif', 
         'piexif',
         'PyQt6',
-        'pyusb'
+        'pyusb',
+        'psutil'
     ]
     
     # Platform-specific packages
     if platform.system() == 'Windows':
-        required_packages.extend(['wmi', 'libusb-package'])
+        required_packages.extend(['wmi', 'libusb-package', 'pywin32'])
     
     missing_packages = []
     for package in required_packages:
