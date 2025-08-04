@@ -176,6 +176,14 @@ class PhotoConverterApp(QMainWindow):
         self.select_output_button.clicked.connect(self.select_output_folder)
         layout.addWidget(self.select_output_button)
         
+        self.manual_select_button = QPushButton("🔍 Manually Select iPhone DCIM Folder")
+        self.manual_select_button.clicked.connect(self.manually_select_iphone)
+        layout.addWidget(self.manual_select_button)
+        
+        self.debug_button = QPushButton("🐛 Debug Detection (Show All Paths)")
+        self.debug_button.clicked.connect(self.debug_detection)
+        layout.addWidget(self.debug_button)
+        
         # Initialize variables
         self.iphone_path = None
         self.output_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "transferred_photos")
@@ -255,6 +263,290 @@ class PhotoConverterApp(QMainWindow):
             help_text = "iPhone not found. Please check your connection."
         
         self.update_status(help_text)
+    
+    def manually_select_iphone(self):
+        """Allow user to manually select the iPhone DCIM folder."""
+        folder = QFileDialog.getExistingDirectory(
+            self, 
+            "Select iPhone DCIM Folder",
+            "",
+            QFileDialog.Option.ShowDirsOnly
+        )
+        
+        if folder:
+            # Verify this looks like a DCIM folder
+            if self._verify_dcim_folder(folder):
+                self.iphone_path = folder
+                self.update_status(f"✅ Manual selection successful! iPhone path set to: {folder}")
+                self.transfer_button.setEnabled(True)
+            else:
+                # Maybe they selected the iPhone root, check for DCIM subfolder
+                dcim_path = os.path.join(folder, "DCIM")
+                if os.path.exists(dcim_path) and self._verify_dcim_folder(dcim_path):
+                    self.iphone_path = dcim_path
+                    self.update_status(f"✅ Found DCIM folder! iPhone path set to: {dcim_path}")
+                    self.transfer_button.setEnabled(True)
+                else:
+                    self.update_status("❌ Selected folder doesn't appear to contain iPhone photos. Please select the DCIM folder inside your iPhone.")
+    
+    def _verify_dcim_folder(self, folder_path):
+        """Verify that a folder contains iPhone-style photos."""
+        try:
+            if not os.path.exists(folder_path):
+                return False
+            
+            items = os.listdir(folder_path)
+            
+            # Look for typical iPhone patterns
+            for item in items:
+                item_path = os.path.join(folder_path, item)
+                if os.path.isdir(item_path):
+                    # Check for Apple folder pattern (100APPLE, 101APPLE, etc.)
+                    if re.match(r'^\d{3}APPLE$', item):
+                        return True
+                    
+                    # Check for photos inside any subfolder
+                    try:
+                        files = os.listdir(item_path)
+                        photo_files = [f for f in files if f.lower().endswith(('.jpg', '.jpeg', '.heic', '.png'))]
+                        if len(photo_files) > 0:
+                            return True
+                    except:
+                        continue
+            
+            # If no subfolders, check for photos directly
+            files = [f for f in items if f.lower().endswith(('.jpg', '.jpeg', '.heic', '.png'))]
+            return len(files) > 0
+            
+        except Exception as e:
+            print(f"Error verifying DCIM folder: {e}")
+            return False
+    
+    def debug_detection(self):
+        """Show detailed debugging information about device detection."""
+        self.update_status("🐛 Starting debug detection - checking all possible iPhone locations...")
+        self.progress_bar.setValue(0)
+        
+        # Run in a separate thread
+        threading.Thread(target=self._debug_detection_worker, daemon=True).start()
+    
+    def _debug_detection_worker(self):
+        """Worker thread for debug detection."""
+        try:
+            system = platform.system()
+            debug_info = []
+            debug_info.append(f"🐛 DEBUG DETECTION RESULTS ({system}):")
+            debug_info.append("=" * 50)
+            
+            if system == "Windows":
+                debug_info.extend(self._debug_windows_detection())
+            elif system == "Darwin":
+                debug_info.extend(self._debug_macos_detection())
+            elif system == "Linux":
+                debug_info.extend(self._debug_linux_detection())
+            
+            debug_text = "\n".join(debug_info)
+            self.update_status(debug_text)
+            self.progress_bar.setValue(100)
+            
+        except Exception as e:
+            self.update_status(f"❌ Debug detection failed: {str(e)}")
+    
+    def _debug_windows_detection(self):
+        """Debug Windows iPhone detection methods."""
+        debug_info = []
+        import string
+        
+        # Check drive letters
+        debug_info.append("\n📁 CHECKING DRIVE LETTERS:")
+        found_drives = []
+        for drive in string.ascii_uppercase:
+            drive_path = f"{drive}:\\"
+            if os.path.exists(drive_path):
+                try:
+                    drive_type = "Unknown"
+                    dcim_path = os.path.join(drive_path, "DCIM")
+                    dcim_exists = os.path.exists(dcim_path)
+                    
+                    # Try to get drive info
+                    try:
+                        result = subprocess.run(
+                            ["wmic", "logicaldisk", "where", f"DeviceID='{drive}:'", "get", "DriveType,VolumeName"],
+                            capture_output=True, text=True, timeout=5
+                        )
+                        if result.returncode == 0:
+                            lines = result.stdout.strip().split('\n')
+                            if len(lines) > 1:
+                                drive_type = lines[1].strip()
+                    except:
+                        pass
+                    
+                    found_drives.append(f"  {drive}: - Type: {drive_type}, DCIM: {'✅' if dcim_exists else '❌'}")
+                    
+                    if dcim_exists:
+                        try:
+                            dcim_contents = os.listdir(dcim_path)
+                            debug_info.append(f"    📂 DCIM contents: {dcim_contents[:5]}{'...' if len(dcim_contents) > 5 else ''}")
+                        except Exception as e:
+                            debug_info.append(f"    ❌ Cannot access DCIM: {e}")
+                            
+                except Exception as e:
+                    found_drives.append(f"  {drive}: - Error: {e}")
+        
+        debug_info.extend(found_drives)
+        
+        # Check WMI devices
+        debug_info.append("\n🔌 CHECKING WMI DEVICES:")
+        try:
+            import wmi
+            c = wmi.WMI()
+            
+            debug_info.append("  Portable Devices:")
+            for device in c.Win32_PnPEntity():
+                if device.Name and ('iphone' in device.Name.lower() or 'apple' in device.Name.lower() or 'portable' in device.Name.lower()):
+                    debug_info.append(f"    📱 {device.Name}")
+            
+            debug_info.append("  Logical Disks:")
+            for disk in c.Win32_LogicalDisk():
+                if disk.DriveType == 2:  # Removable
+                    debug_info.append(f"    💾 {disk.DeviceID} - {disk.VolumeName or 'No Name'}")
+                    
+        except ImportError:
+            debug_info.append("  ❌ WMI not available")
+        except Exception as e:
+            debug_info.append(f"  ❌ WMI Error: {e}")
+        
+        # Check PowerShell devices
+        debug_info.append("\n⚡ CHECKING POWERSHELL DEVICES:")
+        try:
+            result = subprocess.run(
+                ["powershell", "-Command", "Get-PnpDevice | Where-Object {$_.FriendlyName -like '*iPhone*' -or $_.FriendlyName -like '*Apple*'} | Select-Object FriendlyName, Status"],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                for line in lines[2:]:  # Skip headers
+                    if line.strip():
+                        debug_info.append(f"    📱 {line.strip()}")
+            else:
+                debug_info.append(f"  ❌ PowerShell error: {result.stderr}")
+        except Exception as e:
+            debug_info.append(f"  ❌ PowerShell Error: {e}")
+        
+        # Check USB devices
+        debug_info.append("\n🔌 CHECKING USB DEVICES:")
+        try:
+            devices = usb.core.find(find_all=True, idVendor=APPLE_VENDOR_ID)
+            apple_devices = list(devices)
+            if apple_devices:
+                for device in apple_devices:
+                    debug_info.append(f"    🍎 Apple USB Device: Vendor={hex(device.idVendor)}, Product={hex(device.idProduct)}")
+            else:
+                debug_info.append("  ❌ No Apple USB devices found")
+        except Exception as e:
+            debug_info.append(f"  ❌ USB Error: {e}")
+        
+        # Check all partitions with psutil
+        debug_info.append("\n💽 CHECKING ALL PARTITIONS (psutil):")
+        try:
+            import psutil
+            partitions = psutil.disk_partitions()
+            for partition in partitions:
+                if partition.mountpoint:
+                    dcim_path = os.path.join(partition.mountpoint, "DCIM")
+                    dcim_exists = os.path.exists(dcim_path)
+                    debug_info.append(f"    💾 {partition.mountpoint} ({partition.fstype}) - DCIM: {'✅' if dcim_exists else '❌'}")
+                    
+                    if dcim_exists:
+                        try:
+                            dcim_contents = os.listdir(dcim_path)
+                            apple_folders = [f for f in dcim_contents if re.match(r'^\d{3}APPLE$', f)]
+                            debug_info.append(f"      📂 Apple folders: {apple_folders}")
+                        except Exception as e:
+                            debug_info.append(f"      ❌ Cannot read DCIM: {e}")
+        except ImportError:
+            debug_info.append("  ❌ psutil not available")
+        except Exception as e:
+            debug_info.append(f"  ❌ psutil error: {e}")
+        
+        return debug_info
+    
+    def _debug_macos_detection(self):
+        """Debug macOS iPhone detection methods."""
+        debug_info = []
+        
+        # Check volumes
+        debug_info.append("\n📁 CHECKING /Volumes:")
+        try:
+            volumes = os.listdir("/Volumes")
+            for volume in volumes:
+                volume_path = f"/Volumes/{volume}"
+                dcim_path = os.path.join(volume_path, "DCIM")
+                dcim_exists = os.path.exists(dcim_path)
+                debug_info.append(f"  📂 {volume} - DCIM: {'✅' if dcim_exists else '❌'}")
+        except Exception as e:
+            debug_info.append(f"  ❌ Error checking volumes: {e}")
+        
+        # Check system_profiler
+        debug_info.append("\n🔍 CHECKING system_profiler:")
+        try:
+            result = subprocess.run(
+                ["system_profiler", "SPUSBDataType"],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                if "iPhone" in result.stdout:
+                    debug_info.append("  ✅ iPhone found in system_profiler")
+                else:
+                    debug_info.append("  ❌ No iPhone in system_profiler")
+            else:
+                debug_info.append("  ❌ system_profiler failed")
+        except Exception as e:
+            debug_info.append(f"  ❌ system_profiler error: {e}")
+        
+        return debug_info
+    
+    def _debug_linux_detection(self):
+        """Debug Linux iPhone detection methods."""
+        debug_info = []
+        
+        # Check common mount points
+        user_id = os.getuid() if hasattr(os, 'getuid') else 1000
+        username = os.environ.get("USER", "user")
+        
+        paths_to_check = [
+            f"/run/user/{user_id}/gvfs",
+            f"/media/{username}",
+            "/media",
+            "/mnt"
+        ]
+        
+        debug_info.append("\n📁 CHECKING MOUNT POINTS:")
+        for path in paths_to_check:
+            if os.path.exists(path):
+                try:
+                    items = os.listdir(path)
+                    debug_info.append(f"  📂 {path}: {items}")
+                except Exception as e:
+                    debug_info.append(f"  ❌ {path}: Error - {e}")
+            else:
+                debug_info.append(f"  ❌ {path}: Does not exist")
+        
+        # Check lsusb
+        debug_info.append("\n🔌 CHECKING lsusb:")
+        try:
+            result = subprocess.run(["lsusb"], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                apple_lines = [line for line in result.stdout.split('\n') if 'Apple' in line or 'iPhone' in line]
+                if apple_lines:
+                    for line in apple_lines:
+                        debug_info.append(f"  🍎 {line.strip()}")
+                else:
+                    debug_info.append("  ❌ No Apple devices in lsusb")
+        except Exception as e:
+            debug_info.append(f"  ❌ lsusb error: {e}")
+        
+        return debug_info
     
     def test_connection(self):
         """Test iPhone connection and provide detailed feedback."""
@@ -596,6 +888,21 @@ class PhotoConverterApp(QMainWindow):
         iphone_path = self._find_iphone_powershell_windows()
         if iphone_path:
             return iphone_path
+        
+        # Method 6: Windows Explorer Shell Folders
+        iphone_path = self._find_iphone_explorer_windows()
+        if iphone_path:
+            return iphone_path
+        
+        # Method 7: Registry-based detection
+        iphone_path = self._find_iphone_registry_windows()
+        if iphone_path:
+            return iphone_path
+        
+        # Method 8: Scan all available drives thoroughly
+        iphone_path = self._scan_all_drives_windows()
+        if iphone_path:
+            return iphone_path
             
         return None
     
@@ -769,6 +1076,134 @@ class PhotoConverterApp(QMainWindow):
                             return dcim_path
         except:
             pass
+        
+        return None
+    
+    def _find_iphone_explorer_windows(self):
+        """Use Windows Explorer special folders to find iPhone."""
+        try:
+            # Check Windows special folder paths where devices might appear
+            special_paths = [
+                os.path.join(os.environ.get('USERPROFILE', ''), 'Desktop'),
+                os.path.join(os.environ.get('USERPROFILE', ''), 'ThisPCDesktopFolder'),
+                'Computer',
+                'This PC',
+            ]
+            
+            # Also check environment variables that might point to device locations
+            env_vars = ['DEVICEPATH', 'PORTABLE_DEVICE_PATH']
+            for var in env_vars:
+                path = os.environ.get(var)
+                if path:
+                    special_paths.append(path)
+            
+            for base_path in special_paths:
+                if base_path and os.path.exists(base_path):
+                    try:
+                        items = os.listdir(base_path)
+                        for item in items:
+                            item_lower = item.lower()
+                            if ('iphone' in item_lower or 'apple' in item_lower):
+                                item_path = os.path.join(base_path, item)
+                                if os.path.isdir(item_path):
+                                    dcim_path = os.path.join(item_path, "DCIM")
+                                    if os.path.exists(dcim_path):
+                                        return dcim_path
+                    except:
+                        continue
+        except Exception as e:
+            print(f"Explorer detection failed: {e}")
+        
+        return None
+    
+    def _find_iphone_registry_windows(self):
+        """Check Windows registry for mounted device information."""
+        try:
+            import winreg
+            
+            # Check various registry keys where device information might be stored
+            registry_paths = [
+                (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\MountPoints2"),
+                (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Enum\USB"),
+                (winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\MountedDevices"),
+            ]
+            
+            for hkey, subkey_path in registry_paths:
+                try:
+                    with winreg.OpenKey(hkey, subkey_path) as key:
+                        i = 0
+                        while True:
+                            try:
+                                subkey_name = winreg.EnumKey(key, i)
+                                if 'apple' in subkey_name.lower() or 'iphone' in subkey_name.lower():
+                                    # Found a potential iPhone entry, try to get its path
+                                    with winreg.OpenKey(key, subkey_name) as device_key:
+                                        try:
+                                            # Try to get drive letter or path
+                                            drive_letter = winreg.QueryValue(device_key, "")
+                                            if drive_letter:
+                                                dcim_path = os.path.join(drive_letter, "DCIM")
+                                                if os.path.exists(dcim_path):
+                                                    return dcim_path
+                                        except:
+                                            pass
+                                i += 1
+                            except OSError:
+                                break
+                except:
+                    continue
+                    
+        except ImportError:
+            print("winreg not available")
+        except Exception as e:
+            print(f"Registry detection failed: {e}")
+        
+        return None
+    
+    def _scan_all_drives_windows(self):
+        """Thoroughly scan all available drives for iPhone DCIM folders."""
+        try:
+            import psutil
+            
+            # Use psutil to get all disk partitions
+            partitions = psutil.disk_partitions()
+            
+            for partition in partitions:
+                try:
+                    # Skip system partitions and CD-ROMs
+                    if 'cdrom' in partition.opts or partition.fstype == '':
+                        continue
+                    
+                    mount_point = partition.mountpoint
+                    if mount_point and os.path.exists(mount_point):
+                        # Check for DCIM directly
+                        dcim_path = os.path.join(mount_point, "DCIM")
+                        if os.path.exists(dcim_path) and self._verify_iphone_device(mount_point):
+                            return dcim_path
+                        
+                        # Check for nested iPhone folders
+                        try:
+                            items = os.listdir(mount_point)
+                            for item in items:
+                                item_path = os.path.join(mount_point, item)
+                                if os.path.isdir(item_path):
+                                    item_lower = item.lower()
+                                    if ('iphone' in item_lower or 'apple' in item_lower or 
+                                        'portable' in item_lower or item_lower.startswith('apple')):
+                                        nested_dcim = os.path.join(item_path, "DCIM")
+                                        if os.path.exists(nested_dcim):
+                                            return nested_dcim
+                        except:
+                            continue
+                            
+                except Exception as e:
+                    print(f"Error scanning partition {partition.mountpoint}: {e}")
+                    continue
+                    
+        except ImportError:
+            print("psutil not available for drive scanning")
+        except Exception as e:
+            print(f"Drive scanning failed: {e}")
         
         return None
     

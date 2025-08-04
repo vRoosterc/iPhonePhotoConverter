@@ -94,7 +94,14 @@ If you prefer to install manually or need more control:
 
 ### iPhone Detection Issues
 
-**The app now uses advanced detection methods, but if your iPhone still isn't recognized:**
+**The app now uses 8 different detection methods for Windows, but if your iPhone still isn't recognized:**
+
+**Quick Solutions:**
+- Click **"🔍 Manually Select iPhone DCIM Folder"** to browse to your iPhone's photo folder
+- Click **"🐛 Debug Detection"** to see exactly what the app is finding
+- Use **"🧪 Test Connection"** for detailed diagnostics
+
+**If automatic detection fails:**
 
 **For Windows:**
 - Make sure your iPhone is **unlocked** and you've tapped **"Trust This Computer"**
